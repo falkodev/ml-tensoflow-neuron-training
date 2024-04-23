@@ -16,6 +16,11 @@ FEATURE_RESULTS.MAX_VALUES.print()
 
 INPUTS_TENSOR.dispose()
 
+const model = tf.sequential()
+model.add(tf.layers.dense({ inputShape: [2], units: 1 }))
+model.summary()
+train()
+
 function normalize(tensor, min, max) {
   const result = tf.tidy(function() {
     const MIN_VALUES = min || tf.min(tensor, 0)
@@ -28,4 +33,38 @@ function normalize(tensor, min, max) {
   })
 
   return result
+}
+
+async function train() {
+  const LEARNING_RATE = 0.01
+  model.compile({ optimizer: tf.train.sgd(LEARNING_RATE), loss: 'meanSquaredError' })
+
+  let results = await model.fit(FEATURE_RESULTS.NORMALIZED_VALUES, OUTPUTS_TENSOR, {
+    validationSplits: 0.15, // part of the data to be used for validation and not for training
+    shuffle: true,
+    batchSize: 64,
+    epochs: 10 // train data 10 times
+  })
+
+  OUTPUTS_TENSOR.dispose()
+  FEATURE_RESULTS.NORMALIZED_VALUES.dispose()
+
+  console.log('Average error loss: ' + Math.sqrt(results.history.loss[results.history.loss.length - 1]))
+
+  evaluate()
+}
+
+function evaluate() {
+  tf.tidy(function () {
+    // test wiht a house prediction with 750 sqft and 1 bedroom
+    let newInput = normalize(tf.tensor2d([[750, 1]]), FEATURE_RESULTS.MIN_VALUES, FEATURE_RESULTS.MAX_VALUES)
+    let output = model.predict(newInput.NORMALIZED_VALUES)
+    output.print()
+  })
+
+  FEATURE_RESULTS.MIN_VALUES.dispose()
+  FEATURE_RESULTS.MAX_VALUES.dispose()
+  model.dispose()
+
+  console.log(tf.memory().numTensors)
 }
